@@ -1,6 +1,8 @@
 ; Invasion - a simple NES game.
 
 
+SPRITECOUNT = 1
+
 ;
 ; iNES header (needed for emulators)
 ; see https://wiki.nesdev.com/w/index.php/INES for header format
@@ -31,6 +33,13 @@
 
 
 ;
+; Tiles - graphics data for sprites.
+;
+.segment "TILES"
+.incbin "tiles.chr"
+
+
+;
 ; Reserve memory for OAM (object attribute memory/sprite data).
 ;
 
@@ -45,6 +54,10 @@ oam: .res 256
 .segment "CODE"
 
 nmi:
+  lda #<oam
+  sta $2003      ; OAM address
+  lda #>oam
+  sta $4014      ; OAM DMA
   rti
 
 
@@ -101,8 +114,34 @@ reset:
     bit $2002
     bpl :-
 
-  lda #%01000000  ; emphasize greens
-  sta $2001
+  ; Load palettes
+  lda $2002   ; Read PPU status to reset address high/low latch
+  lda #$3f    ; PPU palettes start at #3f00. Write high byte first.
+  sta $2006   ; Write to PPU address register.
+  lda #$00    ; Now write low byte to address register.
+  sta $2006
+
+  ldx #$00
+  :
+    lda palettes, x
+    sta $2007        ; PPU data register.
+    inx
+    cpx #$20
+    bne :-
+
+  ldx #$00
+  :
+    lda sprites, x
+    sta oam, x
+    inx
+    cpx #SPRITECOUNT*4
+    bne :-
+
+  lda #%10000000  ; Turn on NMI
+  sta $2000       ; PPU controller
+
+  lda #%00010000  ; Enable sprites
+  sta $2001       ; PPU mask
 
   :
     jmp :-
@@ -110,3 +149,13 @@ reset:
 
 irq:
   rti
+
+
+.segment "RODATA"
+
+palettes:
+  .byte $0f,$31,$32,$33,$0f,$35,$36,$37,$0f,$39,$3a,$3b,$0f,$3d,$3e,$0f
+  .byte $0f,$2b,$11,$16,$0f,$02,$38,$3c,$0f,$1c,$15,$14,$0f,$02,$38,$3c
+
+sprites:
+  .byte $80,$00,$00,$80
