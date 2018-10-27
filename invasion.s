@@ -126,6 +126,14 @@ nmi:
   ;; NMI routine. Transfer sprite to PPU and then make updates based on gamepad
   ;; state.
 
+  ; Save registers so we can restore them after nmi routine
+	pha
+	txa
+	pha
+	tya
+	pha
+
+  ; DMA transfer sprite date to the PPU
   lda #<oam
   sta $2003      ; OAM address. Low byte of address goes here.
   lda #>oam
@@ -173,6 +181,13 @@ nmi:
   beq :+
     inc oam + 2
   :
+
+  ; restore registers
+  pla
+  tay
+  pla
+  tax
+  pla
 
   rti
 
