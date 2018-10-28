@@ -1,7 +1,7 @@
 ; Invasion - a simple NES game.
 
 
-SPRITECOUNT = 6
+SPRITECOUNT = 2
 
 PAD_A      = $80
 PAD_B      = $40
@@ -66,7 +66,7 @@ gamepad:       .res 1
 gamepad_tmp:   .res 1
 player_x:      .res 1
 player_y:      .res 1
-
+baddies:       .res 8
 
 ;
 ; Code segment - the main code for the game.
@@ -300,6 +300,20 @@ reset:
   lda oam+3
   sta player_x
 
+  ; initialize baddies
+  ldx #$00
+  ldy #$40
+  lda #$40
+  :
+    sty baddies, X
+    clc
+    adc #$20
+    sta baddies + 1, X
+    inx
+    inx
+    cpx #$08
+    bne :-
+
 
   lda #%10000000  ; Turn on NMI
   sta $2000       ; PPU controller
@@ -307,9 +321,66 @@ reset:
   lda #%00010000  ; Enable sprites
   sta $2001       ; PPU mask
 
-  :
+  @forever:
     jsr read_gamepad
-    jmp :-
+
+    ldy #$00
+    @baddy_loop:
+      ; Each iteration of this loop sets up one baddy.
+      ; Each baddy is composed of 4 sprites, so set up oam data for each.
+
+      ; Multiply Y by 8 to figure out our position within oam
+      tya
+      asl
+      asl
+      asl
+      tax
+
+      ; Baddy vertical position
+      lda baddies, Y
+      sta oam + 8, X
+      sta oam + 12, X
+      clc
+      adc #$08
+      sta oam + 16, X
+      sta oam + 20, X
+
+      ; Baddy horizontal position.
+      ; This will be 3 bytes from the vertical position for each sprite.
+      lda baddies + 1, Y
+      sta oam + 11, X
+      sta oam + 19, X
+      clc
+      adc #$08
+      sta oam + 15, X
+      sta oam + 23, X
+
+      ; Baddy tiles
+      ; This will be 1 byte from the vertical positions.
+      lda #$04
+      sta oam + 9, X
+      lda #$05
+      sta oam + 13, X
+      lda #$02
+      sta oam + 17, X
+      lda #$03
+      sta oam + 21, X
+
+      ; Baddy attributes (just palettes for now)
+      ; This will be 2 bytes from the vertical positions.
+      lda #$01
+      sta oam + 10, X
+      sta oam + 14, X
+      sta oam + 18, X
+      sta oam + 22, X
+
+      iny
+      iny
+
+      cpy #$08
+      bne @baddy_loop
+
+    jmp @forever
 
 
 irq:
@@ -325,8 +396,3 @@ palettes:
 sprites:
   .byte $80,$00,$00,$80
   .byte $80,$01,$00,$88
-
-  .byte $40,$02,$01,$80
-  .byte $40,$03,$01,$88
-  .byte $38,$04,$01,$80
-  .byte $38,$05,$01,$88
