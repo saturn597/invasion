@@ -1,7 +1,7 @@
 ; Invasion - a simple NES game.
 
 
-SPRITECOUNT = 1
+SPRITECOUNT = 6
 
 PAD_A      = $80
 PAD_B      = $40
@@ -64,6 +64,8 @@ oam: .res 256
 .segment "ZEROPAGE"
 gamepad:       .res 1
 gamepad_tmp:   .res 1
+player_x:      .res 1
+player_y:      .res 1
 
 
 ;
@@ -139,48 +141,60 @@ nmi:
   lda #>oam
   sta $4014      ; OAM DMA. High byte goes here, and this starts DMA.
 
+  ; respond to button pushes
   lda gamepad
   and #PAD_R
   beq :+
-    inc oam + 3
+    inc player_x
   :
   lda gamepad
   and #PAD_L
   beq :+
-    dec oam + 3
+    dec player_x
   :
   lda gamepad
   and #PAD_U
   beq :+
-    dec oam
+    dec player_y
   :
   lda gamepad
   and #PAD_D
   beq :+
-    inc oam
+    inc player_y
   :
   lda gamepad
   and #PAD_B
   beq :+
-    dec oam + 3
-    dec oam + 3
+    dec player_x
+    dec player_x
   :
   lda gamepad
   and #PAD_A
   beq :+
-    inc oam + 3
-    inc oam + 3
+    inc player_x
+    inc player_x
   :
   lda gamepad
   and #PAD_START
   beq :+
-    inc oam + 2
+    jsr cycle_palettes
   :
   lda gamepad
   and #PAD_SELECT
   beq :+
-    inc oam + 2
+    jsr cycle_palettes
   :
+
+  ; put new player positions into oam
+  lda player_x
+  sta oam + 3
+  clc
+  adc #$08
+  sta oam + 7
+
+  lda player_y
+  sta oam
+  sta oam + 4
 
   ; restore registers
   pla
@@ -191,6 +205,18 @@ nmi:
 
   rti
 
+cycle_palettes:
+  lda oam + 2
+  clc
+  adc #$01
+  and #$03
+  sta oam + 2
+  lda oam + 6
+  and #%11111000
+  ora oam + 2
+  sta oam + 2
+  sta oam + 6
+  rts
 
 reset:
   sei              ; disable interrupts
@@ -268,6 +294,13 @@ reset:
     cpx #SPRITECOUNT*4
     bne :-
 
+  ; initialize sprite location
+  lda oam
+  sta player_y
+  lda oam+3
+  sta player_x
+
+
   lda #%10000000  ; Turn on NMI
   sta $2000       ; PPU controller
 
@@ -287,7 +320,13 @@ irq:
 
 palettes:
   .byte $0f,$31,$32,$33,$0f,$35,$36,$37,$0f,$39,$3a,$3b,$0f,$3d,$3e,$0f
-  .byte $03,$1c,$2b,$39,$0f,$02,$38,$3c,$0f,$1c,$15,$14,$0f,$02,$38,$3c
+  .byte $39,$17,$28,$15, $39,$19,$0c,$15, $0f,$1c,$15,$14, $0f,$13,$25,$24
 
 sprites:
   .byte $80,$00,$00,$80
+  .byte $80,$01,$00,$88
+
+  .byte $40,$02,$01,$80
+  .byte $40,$03,$01,$88
+  .byte $38,$04,$01,$80
+  .byte $38,$05,$01,$88
