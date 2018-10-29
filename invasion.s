@@ -141,6 +141,16 @@ nmi:
   lda #>oam
   sta $4014      ; OAM DMA. High byte goes here, and this starts DMA.
 
+  ; Default sprite palette if player isn't pressing start or select
+  lda gamepad
+  and #(PAD_START | PAD_SELECT)
+  bne :+
+    lda oam + 2
+    and #%11111000
+    sta oam + 2
+    sta oam + 6
+  :
+
   ; respond to button pushes
   lda gamepad
   and #PAD_R
@@ -184,6 +194,15 @@ nmi:
   beq :+
     jsr cycle_palettes
   :
+
+  ; Move baddies
+  ldx #$00
+  :
+    inc baddies + 1, X
+    inx
+    inx
+    cpx #$08
+    bne :-
 
   ; put new player positions into oam
   lda player_x
