@@ -1,7 +1,8 @@
 ; Invasion - a simple NES game.
 
 
-SPRITECOUNT = 2
+SHOTDELTA    = 2
+SPRITECOUNT  = 2
 
 PAD_A      = $80
 PAD_B      = $40
@@ -66,6 +67,8 @@ gamepad:       .res 1
 gamepad_tmp:   .res 1
 player_x:      .res 1
 player_y:      .res 1
+shot_x:        .res 1
+shot_y:        .res 1
 baddies:       .res 8
 
 ;
@@ -175,8 +178,18 @@ nmi:
   lda gamepad
   and #PAD_B
   beq :+
-    dec player_x
-    dec player_x
+    lda shot_y         ; If shot is already on screen, shot_y will be > 0.
+    bne :+             ; In that case, don't start a new shot.
+
+    lda player_y
+    sec
+    sbc #$08           ; Start it out a bit above the player.
+    sta shot_y
+
+    lda player_x
+    clc
+    adc #$04           ; Set the x location to center over the player.
+    sta shot_x
   :
   lda gamepad
   and #PAD_A
@@ -194,6 +207,28 @@ nmi:
   beq :+
     jsr cycle_palettes
   :
+
+  ; Move shot up and add to OAM if y != 0
+  lda shot_y
+  beq @after_shot
+    sec
+    sbc #SHOTDELTA       ; Move shot up
+    cmp #SHOTDELTA
+    bcc @destroy_shot    ; Destroy shot if it left or is about to leave screen
+    sta shot_y           ; Write new y value to shot_y
+    sta oam + 56         ; Also put it in OAM.
+    lda shot_x           ; Put x in OAM as well. (Could probably take this out).
+    sta oam + 59
+    jmp @after_shot
+  @destroy_shot:
+    ; To destroy shot, write 0 to shot_y since that tells us it's "inactive."
+    lda #$00
+    sta shot_y
+    ; Also, put it off screen in oam.
+    lda #$ff
+    sta oam + 56
+    sta oam + 59
+  @after_shot:
 
   ; Move baddies
   ldx #$00
@@ -330,9 +365,17 @@ reset:
     sta baddies + 1, X
     inx
     inx
-    cpx #$08
+    cpx #$06
     bne :-
 
+  ; Initialize "shot" location
+  lda #$00
+  sta shot_x
+  sta shot_y
+
+  ; And shot palette data.
+  lda #$06
+  sta oam + 57
 
   lda #%10000000  ; Turn on NMI
   sta $2000       ; PPU controller
@@ -396,7 +439,7 @@ reset:
       iny
       iny
 
-      cpy #$08
+      cpy #$06
       bne @baddy_loop
 
     jmp @forever
