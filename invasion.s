@@ -1,6 +1,6 @@
 ; Invasion - a simple NES game.
 
-
+BADDYCOUNT   = 3
 SHOTDELTA    = 2
 SPRITECOUNT  = 2
 
@@ -55,7 +55,11 @@ PAD_R      = $01
 ;
 
 .segment "OAM"
-oam: .res 256
+oam:
+oamplayer: .res 8
+oambaddy:  .res (BADDYCOUNT * 16)
+oambullet: .res 4
+
 
 
 ;
@@ -148,10 +152,10 @@ nmi:
   lda gamepad
   and #(PAD_START | PAD_SELECT)
   bne :+
-    lda oam + 2
+    lda oamplayer + 2
     and #%11111000
-    sta oam + 2
-    sta oam + 6
+    sta oamplayer + 2
+    sta oamplayer + 6
   :
 
   ; respond to button pushes
@@ -216,9 +220,9 @@ nmi:
     cmp #SHOTDELTA
     bcc @destroy_shot    ; Destroy shot if it left or is about to leave screen
     sta shot_y           ; Write new y value to shot_y
-    sta oam + 56         ; Also put it in OAM.
+    sta oambullet       ; Also put it in OAM.
     lda shot_x           ; Put x in OAM as well. (Could probably take this out).
-    sta oam + 59
+    sta oambullet + 3
     jmp @after_shot
   @destroy_shot:
     ; To destroy shot, write 0 to shot_y since that tells us it's "inactive."
@@ -226,8 +230,8 @@ nmi:
     sta shot_y
     ; Also, put it off screen in oam.
     lda #$ff
-    sta oam + 56
-    sta oam + 59
+    sta oambullet
+    sta oambullet + 3
   @after_shot:
 
   ; Move baddies
@@ -236,19 +240,19 @@ nmi:
     inc baddies + 1, X
     inx
     inx
-    cpx #$08
+    cpx #(BADDYCOUNT*2)
     bne :-
 
   ; put new player positions into oam
   lda player_x
-  sta oam + 3
+  sta oamplayer + 3
   clc
   adc #$08
-  sta oam + 7
+  sta oamplayer + 7
 
   lda player_y
-  sta oam
-  sta oam + 4
+  sta oamplayer
+  sta oamplayer + 4
 
   ; restore registers
   pla
@@ -260,16 +264,16 @@ nmi:
   rti
 
 cycle_palettes:
-  lda oam + 2
+  lda oamplayer + 2
   clc
   adc #$01
   and #$03
-  sta oam + 2
-  lda oam + 6
+  sta oamplayer + 2
+  lda oamplayer + 6
   and #%11111000
-  ora oam + 2
-  sta oam + 2
-  sta oam + 6
+  ora oamplayer + 2
+  sta oamplayer + 2
+  sta oamplayer + 6
   rts
 
 reset:
@@ -343,15 +347,15 @@ reset:
   ldx #$00
   :
     lda sprites, x
-    sta oam, x
+    sta oamplayer, x
     inx
     cpx #SPRITECOUNT*4
     bne :-
 
   ; initialize sprite location
-  lda oam
+  lda oamplayer
   sta player_y
-  lda oam+3
+  lda oamplayer+3
   sta player_x
 
   ; initialize baddies
@@ -365,7 +369,7 @@ reset:
     sta baddies + 1, X
     inx
     inx
-    cpx #$06
+    cpx #(BADDYCOUNT*2)
     bne :-
 
   ; Initialize "shot" location
@@ -375,7 +379,7 @@ reset:
 
   ; And shot palette data.
   lda #$06
-  sta oam + 57
+  sta oambullet + 1
 
   lda #%10000000  ; Turn on NMI
   sta $2000       ; PPU controller
@@ -400,46 +404,46 @@ reset:
 
       ; Baddy vertical position
       lda baddies, Y
-      sta oam + 8, X
-      sta oam + 12, X
+      sta oambaddy, X
+      sta oambaddy + 4, X
       clc
       adc #$08
-      sta oam + 16, X
-      sta oam + 20, X
+      sta oambaddy + 8, X
+      sta oambaddy + 12, X
 
       ; Baddy horizontal position.
       ; This will be 3 bytes from the vertical position for each sprite.
       lda baddies + 1, Y
-      sta oam + 11, X
-      sta oam + 19, X
+      sta oambaddy + 3, X
+      sta oambaddy + 11, X
       clc
       adc #$08
-      sta oam + 15, X
-      sta oam + 23, X
+      sta oambaddy + 7, X
+      sta oambaddy + 15, X
 
       ; Baddy tiles
       ; This will be 1 byte from the vertical positions.
       lda #$04
-      sta oam + 9, X
+      sta oambaddy + 1, X
       lda #$05
-      sta oam + 13, X
+      sta oambaddy + 5, X
       lda #$02
-      sta oam + 17, X
+      sta oambaddy + 9, X
       lda #$03
-      sta oam + 21, X
+      sta oambaddy + 13, X
 
       ; Baddy attributes (just palettes for now)
       ; This will be 2 bytes from the vertical positions.
       lda #$01
-      sta oam + 10, X
-      sta oam + 14, X
-      sta oam + 18, X
-      sta oam + 22, X
+      sta oambaddy + 2, X
+      sta oambaddy + 6, X
+      sta oambaddy + 10, X
+      sta oambaddy + 14, X
 
       iny
       iny
 
-      cpy #$06
+      cpy #(BADDYCOUNT*2)
       bne @baddy_loop
 
     jmp @forever
