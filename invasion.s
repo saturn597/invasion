@@ -1,9 +1,14 @@
 ; Invasion - a simple NES game.
 
+; Constants affecting game behavior
 BADDYCOUNT   = 3
 SHOTDELTA    = 2
 SPRITECOUNT  = 2
 
+; Game states
+PAUSED     = $80
+
+; Gamepad states
 PAD_A      = $80
 PAD_B      = $40
 PAD_SELECT = $20
@@ -67,8 +72,10 @@ oambullet: .res 4
 ;
 
 .segment "ZEROPAGE"
+game_state:    .res 1
 gamepad:       .res 1
 gamepad_tmp:   .res 1
+gamepad_old:   .res 1
 player_x:      .res 1
 player_y:      .res 1
 shot_x:        .res 1
@@ -142,15 +149,28 @@ nmi:
 	tya
 	pha
 
+  lda game_state
+  and #PAUSED
+  beq :+
+    ; restore registers
+    pla
+    tay
+    pla
+    tax
+    pla
+
+    rti
+  :
+
   ; DMA transfer sprite date to the PPU
   lda #<oam
   sta $2003      ; OAM address. Low byte of address goes here.
   lda #>oam
   sta $4014      ; OAM DMA. High byte goes here, and this starts DMA.
 
-  ; Default sprite palette if player isn't pressing start or select
+  ; Default sprite palette if player isn't pressing select
   lda gamepad
-  and #(PAD_START | PAD_SELECT)
+  and #(PAD_SELECT)
   bne :+
     lda oamplayer + 2
     and #%11111000
@@ -200,11 +220,6 @@ nmi:
   beq :+
     inc player_x
     inc player_x
-  :
-  lda gamepad
-  and #PAD_START
-  beq :+
-    jsr cycle_palettes
   :
   lda gamepad
   and #PAD_SELECT
@@ -275,6 +290,81 @@ cycle_palettes:
   sta oamplayer + 2
   sta oamplayer + 6
   rts
+
+game_loop:
+  ; Toggle game pause state if pause was up but is now down
+  jsr read_gamepad
+  lda gamepad_old
+  eor #PAD_START    ; Negate the pad_start bit in gamepad_old
+  and gamepad
+  and #PAD_START
+  beq :+
+    lda game_state
+    eor #PAUSED
+    sta game_state
+  :
+
+  ; Save current gamepad state for next time
+  lda gamepad
+  sta gamepad_old
+
+  ; Put baddy data into oam
+  ldy #$00
+  @baddy_loop:
+    ; Each iteration of this loop sets up one baddy.
+    ; Each baddy is composed of 4 sprites, so set up oam data for each.
+
+    ; Multiply Y by 8 to figure out our position within oam
+    tya
+    asl
+    asl
+    asl
+    tax
+
+    ; Baddy vertical position
+    lda baddies, Y
+    sta oambaddy, X
+    sta oambaddy + 4, X
+    clc
+    adc #$08
+    sta oambaddy + 8, X
+    sta oambaddy + 12, X
+
+    ; Baddy horizontal position.
+    ; This will be 3 bytes from the vertical position for each sprite.
+    lda baddies + 1, Y
+    sta oambaddy + 3, X
+    sta oambaddy + 11, X
+    clc
+    adc #$08
+    sta oambaddy + 7, X
+    sta oambaddy + 15, X
+
+    ; Baddy tiles
+    ; This will be 1 byte from the vertical positions.
+    lda #$04
+    sta oambaddy + 1, X
+    lda #$05
+    sta oambaddy + 5, X
+    lda #$02
+    sta oambaddy + 9, X
+    lda #$03
+    sta oambaddy + 13, X
+
+    ; Baddy attributes (just palettes for now)
+    ; This will be 2 bytes from the vertical positions.
+    lda #$01
+    sta oambaddy + 2, X
+    sta oambaddy + 6, X
+    sta oambaddy + 10, X
+    sta oambaddy + 14, X
+
+    iny
+    iny
+
+    cpy #(BADDYCOUNT*2)
+    bne @baddy_loop
+  jmp game_loop
 
 reset:
   sei              ; disable interrupts
@@ -387,67 +477,7 @@ reset:
   lda #%00010000  ; Enable sprites
   sta $2001       ; PPU mask
 
-  @forever:
-    jsr read_gamepad
-
-    ldy #$00
-    @baddy_loop:
-      ; Each iteration of this loop sets up one baddy.
-      ; Each baddy is composed of 4 sprites, so set up oam data for each.
-
-      ; Multiply Y by 8 to figure out our position within oam
-      tya
-      asl
-      asl
-      asl
-      tax
-
-      ; Baddy vertical position
-      lda baddies, Y
-      sta oambaddy, X
-      sta oambaddy + 4, X
-      clc
-      adc #$08
-      sta oambaddy + 8, X
-      sta oambaddy + 12, X
-
-      ; Baddy horizontal position.
-      ; This will be 3 bytes from the vertical position for each sprite.
-      lda baddies + 1, Y
-      sta oambaddy + 3, X
-      sta oambaddy + 11, X
-      clc
-      adc #$08
-      sta oambaddy + 7, X
-      sta oambaddy + 15, X
-
-      ; Baddy tiles
-      ; This will be 1 byte from the vertical positions.
-      lda #$04
-      sta oambaddy + 1, X
-      lda #$05
-      sta oambaddy + 5, X
-      lda #$02
-      sta oambaddy + 9, X
-      lda #$03
-      sta oambaddy + 13, X
-
-      ; Baddy attributes (just palettes for now)
-      ; This will be 2 bytes from the vertical positions.
-      lda #$01
-      sta oambaddy + 2, X
-      sta oambaddy + 6, X
-      sta oambaddy + 10, X
-      sta oambaddy + 14, X
-
-      iny
-      iny
-
-      cpy #(BADDYCOUNT*2)
-      bne @baddy_loop
-
-    jmp @forever
-
+  jsr game_loop
 
 irq:
   rti
