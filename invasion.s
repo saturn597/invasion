@@ -80,6 +80,7 @@ player_x:      .res 1
 player_y:      .res 1
 shot_x:        .res 1
 shot_y:        .res 1
+baddies_left:  .res 1
 baddies:       .res 8
 
 ;
@@ -327,31 +328,42 @@ game_loop:
     asl
     asl
     tax
+
     lda shot_y
     cmp baddies, Y
     bcc @end_collision_check
-    ; bullet above
+
+    ; If we get here, bullet is above bottom edge
+
     lda shot_x
     cmp baddies + 1, Y
     bcc @end_collision_check
-    ; bullet to right
+
+    ; If we get here, bullet is to right of left edge
+
     lda shot_y
     sec
     sbc #$10
     cmp baddies, Y
     bcs @end_collision_check
-    ; bullet vertically aligned
+
+    ; If we get here, bullet is vertically aligned
+
     lda shot_x
     sec
     sbc #$10
     cmp baddies + 1, Y
     bcs @end_collision_check
+
     ; bullet horizontally aligned, thus collision
+
+    ; If no more baddies left, reset.
+    dec baddies_left
+    beq reset
     ; Set y coordinate to 0 to indicate the baddy is "destroyed"
     lda #$00
     sta baddies, Y
     ; Also destroy bullet.
-    lda #$00
     sta shot_y
     ; Put bullet off screen in oam.
     lda #$ff
@@ -527,6 +539,8 @@ reset:
     inx
     cpx #(BADDYCOUNT*2)
     bne :-
+  lda #BADDYCOUNT
+  sta baddies_left
 
   ; Initialize "shot" location
   lda #$00
@@ -553,7 +567,7 @@ irq:
 
 palettes:
   .byte $0f,$31,$32,$33,$0f,$35,$36,$37,$0f,$39,$3a,$3b,$0f,$3d,$3e,$0f
-  .byte $39,$17,$28,$15, $39,$19,$0c,$15, $0f,$1c,$15,$14, $0f,$13,$25,$24
+  .byte $02,$17,$28,$15, $39,$19,$0c,$15, $0f,$1c,$15,$14, $0f,$13,$25,$24
 
 sprites:
   .byte $80,$00,$00,$80
