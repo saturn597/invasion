@@ -357,9 +357,6 @@ game_loop:
 
     ; bullet horizontally aligned, thus collision
 
-    ; If no more baddies left, reset.
-    dec baddies_left
-    beq reset
     ; Set y coordinate to 0 to indicate the baddy is "destroyed"
     lda #$00
     sta baddies, Y
@@ -369,6 +366,9 @@ game_loop:
     lda #$ff
     sta oambullet
     sta oambullet + 3
+    ; If no more baddies left, reset.
+    dec baddies_left
+    beq start_new_game
 
     @end_collision_check:
     iny
@@ -444,6 +444,53 @@ game_loop:
 
   jmp game_loop
 
+start_new_game:
+  jsr game_setup
+  jmp game_loop
+
+game_setup:
+  ; put sprite locations into oam
+  ldx #$00
+  :
+    lda sprites, x
+    sta oamplayer, x
+    inx
+    cpx #SPRITECOUNT*4
+    bne :-
+
+  ; initialize player location
+  lda oamplayer
+  sta player_y
+  lda oamplayer+3
+  sta player_x
+
+  ; initialize baddies
+  ldx #$00
+  ldy #$40                ; Baddy y coord here
+  lda #$00                ; Baddy x coords start here
+  :
+    sty baddies, X
+    sta baddies + 1, X
+    clc
+    adc #$20
+    inx
+    inx
+    cpx #(BADDYCOUNT*2)
+    bne :-
+  lda #BADDYCOUNT
+  sta baddies_left
+
+  ; Initialize bullet location
+  lda #$00
+  sta shot_x
+  sta shot_y
+
+  ; And bullet palette data.
+  lda #$06
+  sta oambullet + 1
+
+  rts
+
 reset:
   sei              ; disable interrupts
   cld              ; disable decimal mode
@@ -512,44 +559,7 @@ reset:
     cpx #$20
     bne :-
 
-  ldx #$00
-  :
-    lda sprites, x
-    sta oamplayer, x
-    inx
-    cpx #SPRITECOUNT*4
-    bne :-
-
-  ; initialize sprite location
-  lda oamplayer
-  sta player_y
-  lda oamplayer+3
-  sta player_x
-
-  ; initialize baddies
-  ldx #$00
-  ldy #$40
-  lda #$40
-  :
-    sty baddies, X
-    clc
-    adc #$20
-    sta baddies + 1, X
-    inx
-    inx
-    cpx #(BADDYCOUNT*2)
-    bne :-
-  lda #BADDYCOUNT
-  sta baddies_left
-
-  ; Initialize "shot" location
-  lda #$00
-  sta shot_x
-  sta shot_y
-
-  ; And shot palette data.
-  lda #$06
-  sta oambullet + 1
+  jsr game_setup
 
   lda #%10000000  ; Turn on NMI
   sta $2000       ; PPU controller
@@ -557,7 +567,7 @@ reset:
   lda #%00010000  ; Enable sprites
   sta $2001       ; PPU mask
 
-  jsr game_loop
+  jmp game_loop
 
 irq:
   rti
