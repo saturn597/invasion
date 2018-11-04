@@ -298,11 +298,22 @@ game_loop:
   eor #PAD_START    ; Negate the pad_start bit in gamepad_old
   and gamepad
   and #PAD_START
-  beq :+
+  beq @end_pause_toggle
     lda game_state
-    eor #PAUSED
+    eor #PAUSED     ; toggle paused state
     sta game_state
-  :
+
+    ; Brighten or darken screen to reflect pause state
+    and #PAUSED
+    beq @brighten_screen
+    @darken_screen:
+      lda #%11110000
+      sta $2001
+      jmp @end_pause_toggle
+    @brighten_screen:
+      lda #%00010000
+      sta $2001
+  @end_pause_toggle:
 
   ; Save current gamepad state for next time
   lda gamepad
