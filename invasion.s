@@ -100,14 +100,14 @@ read_gamepad:
   ;; Based on: http://nintendoage.com/forum/messageview.cfm?catid=22&threadid=8747
   ;; But with my own tweaks.
 
-	lda #$01
-	sta $4016
-	lda #$00
-	sta $4016
+  lda #$01
+  sta $4016
+  lda #$00
+  sta $4016
   sta gamepad_tmp  ; use temp variable to avoid NMI-related concurrency issues
 
-	ldx #$08
-	:
+  ldx #$08
+  :
     lda $4016
     lsr
     rol gamepad_tmp
@@ -115,39 +115,39 @@ read_gamepad:
     bne :-
   lda gamepad_tmp
   sta gamepad
-	rts
+  rts
 
 read_gamepad_alt:
   ;; An alternate method of reading gamepad for reference.
   ;; From http://forums.nesdev.com/viewtopic.php?t=11151
 
-	lda #$01
-	sta $4016
-	lda #$00
-	sta $4016
-	ldx #$08
-	:
-		pha               ; Push A to stack
-		lda $4016         ; Read next button
-		and #%00000001    ; Rainwarrior's example uses #%11, not #%01 - why?
-		cmp #%00000001    ; If A equals this (or is greater), this sets carry bit.
-		pla               ; Pull top byte in stack into A.
-		rol               ; Rotate left puts carry into rightmost bit.
-		dex
-		bne :-            ; Repeat.
-	sta gamepad         ; We now have the controller state in a single byte.
-	rts
+  lda #$01
+  sta $4016
+  lda #$00
+  sta $4016
+  ldx #$08
+  :
+    pha               ; Push A to stack
+    lda $4016         ; Read next button
+    and #%00000001    ; Rainwarrior's example uses #%11, not #%01 - why?
+    cmp #%00000001    ; If A equals this (or is greater), this sets carry bit.
+    pla               ; Pull top byte in stack into A.
+    rol               ; Rotate left puts carry into rightmost bit.
+    dex
+    bne :-            ; Repeat.
+  sta gamepad         ; We now have the controller state in a single byte.
+  rts
 
 nmi:
   ;; NMI routine. Transfer sprite to PPU and then make updates based on gamepad
   ;; state.
 
   ; Save registers so we can restore them after nmi routine
-	pha
-	txa
-	pha
-	tya
-	pha
+  pha
+  txa
+  pha
+  tya
+  pha
 
   lda game_state
   and #PAUSED
