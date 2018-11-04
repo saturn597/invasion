@@ -235,7 +235,7 @@ nmi:
     cmp #SHOTDELTA
     bcc @destroy_shot    ; Destroy shot if it left or is about to leave screen
     sta shot_y           ; Write new y value to shot_y
-    sta oambullet       ; Also put it in OAM.
+    sta oambullet        ; Also put it in OAM.
     lda shot_x           ; Put x in OAM as well. (Could probably take this out).
     sta oambullet + 3
     jmp @after_shot
@@ -308,9 +308,54 @@ game_loop:
   lda gamepad
   sta gamepad_old
 
+  ; Check for collisions
+  ldy #$00
+  @collide_baddies:
+    tya
+    asl
+    asl
+    asl
+    tax
+    lda shot_y
+    cmp baddies, Y
+    bcc @end_collision_check
+    ; bullet above
+    lda shot_x
+    cmp baddies + 1, Y
+    bcc @end_collision_check
+    ; bullet to right
+    lda shot_y
+    sec
+    sbc #$10
+    cmp baddies, Y
+    bcs @end_collision_check
+    ; bullet vertically aligned
+    lda shot_x
+    sec
+    sbc #$10
+    cmp baddies + 1, Y
+    bcs @end_collision_check
+    ; bullet horizontally aligned, thus collision
+    ; Set y coordinate to 0 to indicate the baddy is "destroyed"
+    lda #$00
+    sta baddies, Y
+    ; Also destroy bullet.
+    lda #$00
+    sta shot_y
+    ; Put bullet off screen in oam.
+    lda #$ff
+    sta oambullet
+    sta oambullet + 3
+
+    @end_collision_check:
+    iny
+    iny
+    cpy #(BADDYCOUNT*2)
+    bne @collide_baddies
+
   ; Put baddy data into oam
   ldy #$00
-  @baddy_loop:
+  @baddy_oam_loop:
     ; Each iteration of this loop sets up one baddy.
     ; Each baddy is composed of 4 sprites, so set up oam data for each.
 
@@ -323,6 +368,14 @@ game_loop:
 
     ; Baddy vertical position
     lda baddies, Y
+    bne @baddy_alive             ; we set y pos to 0 if baddy is destroyed
+      lda #$ff                   ; in that case, move all sprites off screen
+      sta oambaddy, X
+      sta oambaddy + 4, X
+      sta oambaddy + 8, X
+      sta oambaddy + 12, X
+      jmp @end_baddy_oam_loop
+    @baddy_alive:
     sta oambaddy, X
     sta oambaddy + 4, X
     clc
@@ -359,11 +412,13 @@ game_loop:
     sta oambaddy + 10, X
     sta oambaddy + 14, X
 
+    @end_baddy_oam_loop:
     iny
     iny
 
     cpy #(BADDYCOUNT*2)
-    bne @baddy_loop
+    bne @baddy_oam_loop
+
   jmp game_loop
 
 reset:
