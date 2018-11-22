@@ -4,6 +4,7 @@
 BADDYCOUNT   = 3
 SHOTDELTA    = 2
 SPRITECOUNT  = 2
+TITLESIZE    = 8           ; Should be multiple of 4, since attr table size also depends on this
 
 ; Game states
 PAUSED     = $80
@@ -308,11 +309,11 @@ game_loop:
     and #PAUSED
     beq @brighten_screen
     @darken_screen:
-      lda #%11110000
+      lda #%11111110            ; Keep backgrounds and sprites enabled as well as darkening
       sta $2001
       jmp @end_pause_toggle
     @brighten_screen:
-      lda #%00010000
+      lda #%00011110            ; Keep backgrounds and sprites enabled as well as darkening
       sta $2001
   @end_pause_toggle:
 
@@ -491,6 +492,77 @@ game_setup:
 
   rts
 
+
+set_up_title_screen:
+  jsr clear_bg
+  jsr show_title
+  lda #$00
+  sta $2005
+  sta $2005
+  rts
+
+
+clear_bg:
+  ; Fill nametable with empty tiles (such as #$0d).
+  ; The first nametable goes from $2000 to $23bf (just before $23c0, the
+  ; start of our attribute table). So do $3c0 iterations to fill it.
+  @ITERS_LOWER_BYTE = $c0
+  @ITERS_UPPER_BYTE = $03
+  lda $2002                       ; Reset high/low latch in PPUADDR ($2006)
+  lda #$20
+  sta $2006
+  lda #$00
+  sta $2006
+  ldy #@ITERS_UPPER_BYTE
+  ldx #@ITERS_LOWER_BYTE
+  @fill_loop:
+    lda #$0d
+    sta $2007
+    dex
+    bne @fill_loop
+  @dec_y:
+    dey
+    cpy #$ff
+    bne @fill_loop
+  rts
+
+
+show_title:
+  ; Place title graphic near the middle of the screen.
+  ; Midpoint of the screen is about at tile $21cc.
+  lda $2002                       ; Reset high/low latch in PPUADDR ($2006)
+  lda #$21
+  sta $2006
+  lda #$cc
+  sta $2006
+
+  ldx #$00
+  :
+    lda main_text, x
+    sta $2007
+    inx
+    cpx #TITLESIZE
+    bne :-
+
+  ; Set up attribute table.
+  ; Attribute table starts at PPU memory $23c0.
+  ; For our title graphic, data starts at $23db.
+  lda $2002
+  lda #$23
+  sta $2006
+  lda #$db
+  sta $2006
+  ldx #$00
+  :
+    lda attribute, x
+    sta $2007
+    inx
+    cpx #(TITLESIZE / 4)
+    bne :-
+
+  rts
+
+
 reset:
   sei              ; disable interrupts
   cld              ; disable decimal mode
@@ -559,12 +631,14 @@ reset:
     cpx #$20
     bne :-
 
+  jsr set_up_title_screen
+
   jsr game_setup
 
   lda #%10000000  ; Turn on NMI
   sta $2000       ; PPU controller
 
-  lda #%00010000  ; Enable sprites
+  lda #%00011110  ; Enable sprites, bg, show leftmost sprites and bg
   sta $2001       ; PPU mask
 
   jmp game_loop
@@ -576,9 +650,15 @@ irq:
 .segment "RODATA"
 
 palettes:
-  .byte $0f,$31,$32,$33,$0f,$35,$36,$37,$0f,$39,$3a,$3b,$0f,$3d,$3e,$0f
-  .byte $02,$17,$28,$15, $39,$19,$0c,$15, $0f,$1c,$15,$14, $0f,$13,$25,$24
+  .byte $02,$17,$28,$15, $39,$19,$0c,$15, $0f,$1c,$15,$14, $0f,$13,$25,$24              ; sprite palette
+  .byte $02,$17,$28,$15, $39,$19,$0c,$15, $0f,$1c,$15,$14, $0f,$13,$25,$24              ; bg palette
 
 sprites:
   .byte $80,$00,$00,$80
   .byte $80,$01,$00,$88
+
+main_text:
+  .byte $07, $08, $09, $0a, $0b, $07, $0c, $08
+
+attribute:
+  .byte %11110000, %11110000
